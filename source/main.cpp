@@ -2,6 +2,7 @@
 #include<iostream>
 #include<thread>
 #include<vector>
+#include<queue>
 #include "LoserTree.hpp"
 #include "FileOperator.hpp"
 //vector that store the each run's length
@@ -23,8 +24,9 @@ void readFromDisk(Buffer* inputBuffer, FileOperator* fileOperator, int startPosi
     fileOperator->writeToInputBuffer(filePath, predictSize, startPosition, inputBuffer);
 }
 //Thread 2: generate Run
-void generateRun(LoserTree* loserTree, Buffer* inputBuffer, Buffer* outputBuffer,int*overLen) {
+void generateRun(LoserTree* loserTree, Buffer* inputBuffer, Buffer* outputBuffer,int*overLen,bool*isReset) {
     *overLen = -1;
+    *isReset = false;
     //get two buffers' size
     int bufferSize = inputBuffer->getCurSize();
     //num of valid data
@@ -37,9 +39,11 @@ void generateRun(LoserTree* loserTree, Buffer* inputBuffer, Buffer* outputBuffer
         ++count;
         //if all the data in the tree is invalid
         if (loserTree->needToCreateNewRun()) {
+            //std::cout << loserTree->getTop().getValue() << " \n";
             loserTree->setValid();
             //record the overLen
             *overLen = count;
+            *isReset = true;
         }
         
     }
@@ -110,13 +114,14 @@ void startSort() {
         std::thread t1(readFromDisk,&buffers[(pin+1)%3],&fileOperator,curLocation,filepath);
         //run generation
         overLen = 0;
-        std::thread t2(generateRun, loserTree, &buffers[pin], &buffers[(pin+2)%3],&overLen);
+        bool isReset=false;
+        std::thread t2(generateRun, loserTree, &buffers[pin], &buffers[(pin+2)%3],&overLen,&isReset);
         t2.join();
         //std::cout << "Run generated successfully\n";
         //write the output buffer to the disk
         std::thread t3(writeToDisk, &buffers[(pin + 2) % 3], &fileOperator, isFirst, outputPath);
         // if the run is over
-        if (overLen<buffers[(pin+2)%3].getCurSize()) {
+        if (overLen<buffers[(pin+2)%3].getCurSize()||isReset) {
             //std::cout << overLen << "<"<< buffers[(pin + 2) % 3].getCurSize()<<"\n";
 
             //compute the curLen
@@ -149,7 +154,8 @@ void startSort() {
     }
     //there is a buffer that has already read data from disk but has not been write to loserTree
     overLen = 0;
-    generateRun(loserTree, &buffers[pin], &buffers[(pin + 2)%3], &overLen);
+    bool isReset = false;
+    generateRun(loserTree, &buffers[pin], &buffers[(pin + 2)%3], &overLen,&isReset);
     writeToDisk(&buffers[(pin + 2) % 3], &fileOperator, false, outputPath);
     if (overLen < buffers[(pin + 2) % 3].getCurSize()) {
         //std::cout << overLen << "<" << buffers[(pin + 2) % 3].getCurSize() << "\n";
@@ -261,12 +267,119 @@ void getBestMergeSequence() {
     }
     std::cout << "The merge cost is: " << cost << "\n";
 }
+void mergeRuns(){
+    //the input and output file path
+    std::string inputFilePath = "Input.txt";
+    std::string outputFilePath = "Output.txt";
+
+    FileOperator f;
+    //get the total data size
+    int dataSize = 0;
+    for (int i = 0; i < runLength.size();++i){
+        dataSize += runLength[i];
+    }
+    int runNum = runLength.size();
+    std::cout << "The data size is: " << dataSize << "\n";
+    std::cout << "The number of run is: " << runNum << "\n";
+    // input the k(Merge Order) and the buffer's size
+    std::cout << "Please input the k(Merge Order) to continue:\n";
+    int k;
+    std::cin >> k;
+    std::cout << "Please input the buffer's size:\n";
+    int bufferSize;
+    std::cin >> bufferSize;
+    //initiate buffers and the loserTree
+    Buffer *freeBuffer = new Buffer[2 * k];
+    //flag to show if the buffer is free
+    bool *isFree = new bool[2 * k];
+    //cur pin
+    int curPin = 0;
+    for (int i = 0; i < 2 * k;++i){
+        freeBuffer[i] = Buffer(bufferSize);
+        isFree[i] = true;
+    }
+    Buffer *outputBuffer = new Buffer[2];
+    for (int i = 0; i < 2;++i){
+        outputBuffer[i] = Buffer(bufferSize);
+    }
+    std::cout << "Output Buffer's Size is: \n";
+    for (int i = 0; i < 2;++i){
+        std::cout << outputBuffer[i].getBufferSize() << " ";
+    }
+    std::cout << "\n";
+    
+    Buffer**workingBuffer=new Buffer*[k];
+    for (int i = 0; i < k;++i){
+        workingBuffer[i] = new Buffer[2];
+    }
+    // get each run's initial start Position
+    int *runStartPosition = new int[runNum];
+    for (int i = 0; i < runNum;++i){
+       if(i==0){
+        runStartPosition[i] = 0;
+       }
+       else{
+        runStartPosition[i] = runStartPosition[i - 1] + runLength[i - 1];
+       }
+    }
+    //initial each run's curPosition
+    int *runCurPosition = new int[runNum];
+    for (int i = 0; i < runNum; ++i){
+       runCurPosition[i] = runStartPosition[i];
+    }
+    std::cout << "runStartPosition: \n";
+    for (int i = 0; i < runNum;++i){
+       std::cout << runStartPosition[i] << " ";
+    }
+    std::cout << "\n";
+    std::cout << "runCurPosition: \n";
+    for (int i = 0; i < runNum;++i){
+       std::cout << runCurPosition[i] << " ";
+    }
+    std::cout << "\n";
+    if (runNum < k){
+      //if num of run is less than k
+      //initiate working buffer
+       for (int i = 0; i < runNum;++i){
+         workingBuffer[i][0] = freeBuffer[i];
+         isFree[i] = false;
+       }
+      //read data from disk to working buffer
+       for (int i = 0; i < runNum;++i){
+          if((i!=runNum-1)&&(runCurPosition[i]+bufferSize<=runStartPosition[i+1])){
+                f.writeToInputBuffer(outputFilePath, bufferSize, runCurPosition[i], &workingBuffer[i][0]);
+                runCurPosition[i] += bufferSize;
+          }
+          else if(i==runNum-1){
+                f.writeToInputBuffer(outputFilePath, bufferSize, runCurPosition[i], &workingBuffer[i][0]);
+                runCurPosition[i] += bufferSize;
+          }
+          else if(runCurPosition[i]+bufferSize>runStartPosition[i+1]){
+                f.writeToInputBuffer(outputFilePath, runStartPosition[i + 1] - runCurPosition[i], runCurPosition[i], &workingBuffer[i][0]);
+                runCurPosition[i] = runStartPosition[i + 1];
+          }
+       }
+       //initiate data
+       int *data = new int[runNum];
+       for (int i = 0; i < runNum;++i){
+          data[i] = workingBuffer[i][0].buffer[0];
+       }
+
+       for (int i = 0; i < runNum;++i){
+          std::cout << data[i] << " ";
+       }
+       std::cout << "\n";
+       LoserTree loserTree(data, runNum);
+    }
+    
+}
 int main() {
     char flag = 'y';
     while(flag=='y'){
         runLength.clear();
         startSort();
         //getBestMergeSequence();
+        mergeRuns();
         std::cout << "Do you want to continue y/n(Yes/No)?\n";
         std::cin >> flag;
         system("cls");
