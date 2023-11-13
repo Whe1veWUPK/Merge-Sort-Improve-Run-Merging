@@ -5,6 +5,7 @@
 #include<queue>
 #include<deque>
 #include<fstream>
+#include<cmath>
 #include "LoserTree.hpp"
 #include "FileOperator.hpp"
 //vector that store the each run's length
@@ -67,7 +68,7 @@ void writeToDisk(Buffer* outputBuffer, FileOperator* FileOperator, bool isFirst,
     FileOperator->writeToFile(filePath, predictSize, isFirst, outputBuffer);
 }
 //read the run's data that will exhaust first
-void readRunData(Buffer*freeBuffer,FileOperator*fileOperator,std::string filePath,std::deque<int>*workingBufferQueue,int runNum,int*runCurPosition,int*runStartPosition,bool isFirst,bool*isOver,int*curRunNum,int dataSize,std::queue<int>*freeIndex,int bufferSize){
+void readRunData(Buffer*freeBuffer,FileOperator*fileOperator,std::string filePath,std::deque<int>*workingBufferQueue,int numOfMergeWays,int runNum,int*runCurPosition,int*runStartPosition,bool isFirst,bool*isOver,int*curRunNum,int startPos,int dataSize,std::queue<int>*freeIndex,int bufferSize){
     //the process has been done in intial part
     if(isFirst){
         return;
@@ -75,7 +76,7 @@ void readRunData(Buffer*freeBuffer,FileOperator*fileOperator,std::string filePat
     //find the run that will exhaust first
     int key = -1;
     int minValue = (((1 << 30) - 1) * 2 + 1);
-    for (int i = 0; i < runNum;++i){
+    for (int i = 0; i < numOfMergeWays;++i){
         if(isOver[i]){
             // if the run is over, then just skip
             continue;
@@ -97,36 +98,36 @@ void readRunData(Buffer*freeBuffer,FileOperator*fileOperator,std::string filePat
     //add the new Key to the working buffer queue
     workingBufferQueue[key].push_back(newKey);
     //update run's cur pos
-    if(key==runNum-1){
-            fileOperator->writeToInputBuffer(filePath, bufferSize, runCurPosition[key], &freeBuffer[workingBufferQueue[key].back()]);
-            runCurPosition[key] += freeBuffer[workingBufferQueue[key].back()].getCurSize();
+    if((key+startPos)==runNum-1){
+            fileOperator->writeToInputBuffer(filePath, bufferSize, runCurPosition[startPos+key], &freeBuffer[workingBufferQueue[key].back()]);
+            runCurPosition[startPos+key] += freeBuffer[workingBufferQueue[key].back()].getCurSize();
     }
-    else if(runCurPosition[key]+bufferSize<=runStartPosition[key+1]){
-        fileOperator->writeToInputBuffer(filePath, bufferSize, runCurPosition[key], &freeBuffer[workingBufferQueue[key].back()]);
-        runCurPosition[key] += bufferSize;            
+    else if(runCurPosition[startPos+key]+bufferSize<=runStartPosition[startPos+key+1]){
+        fileOperator->writeToInputBuffer(filePath, bufferSize, runCurPosition[startPos+key], &freeBuffer[workingBufferQueue[key].back()]);
+        runCurPosition[startPos+key] += bufferSize;            
     }
-    else if((runCurPosition[key]+bufferSize>runStartPosition[key+1])&&(runCurPosition[key]<runStartPosition[key+1])){
-        fileOperator->writeToInputBuffer(filePath, runStartPosition[key + 1] - runCurPosition[key],runCurPosition[key],&freeBuffer[workingBufferQueue[key].back()]);
-        runCurPosition[key] = runStartPosition[key + 1];
+    else if((runCurPosition[startPos+key]+bufferSize>runStartPosition[startPos+key+1])&&(runCurPosition[startPos+key]<runStartPosition[startPos+key+1])){
+        fileOperator->writeToInputBuffer(filePath, runStartPosition[startPos+key + 1] - runCurPosition[startPos+key],runCurPosition[startPos+key],&freeBuffer[workingBufferQueue[key].back()]);
+        runCurPosition[startPos+key] = runStartPosition[startPos+key + 1];
     }
-    else if(runCurPosition[key]==runStartPosition[key+1]){
+    else if(runCurPosition[startPos+key]==runStartPosition[startPos+key+1]){
         //the run is over
         return;
     }
     //set the over info and curRunNum info
-    if(key==runNum-1){
+    if((key+startPos)==runNum-1){
         //if the last run is over, then return
         if(isOver[key]){
             return;
         }
         //if the last run's data has all been read, set the run's status to over 
-        if(runCurPosition[key]>=dataSize&&(!isOver[key])){
+        if(runCurPosition[startPos+key]>=dataSize&&(!isOver[key])){
             isOver[key] = true;
             --*curRunNum;
         }
 
     }
-    else if(runCurPosition[key]==runStartPosition[key+1]){
+    else if(runCurPosition[startPos+key]==runStartPosition[startPos+key+1]){
         //the run is over
         if(isOver[key]){
             return;
@@ -158,7 +159,7 @@ void readRunData(Buffer*freeBuffer,FileOperator*fileOperator,std::string filePat
     }
 }
 //k-way-merge
-void startMerge(LoserTree*loserTree,Buffer*outputBuffer,Buffer*freeBuffer,std::deque<int>*workingBufferQueue,int*runNum,int*runNumNotMerged,bool*isOver,std::queue<int>*freeIndex){
+void startMerge(LoserTree*loserTree,Buffer*outputBuffer,Buffer*freeBuffer,std::deque<int>*workingBufferQueue,int*runNumNotMerged,bool*isOver,std::queue<int>*freeIndex){
     // get bufferSize
     int bufferSize = outputBuffer->getBufferSize();
     //resize outputbuffer
@@ -501,7 +502,7 @@ void mergeRuns(){
 
     std::cout << freeIndex.front() << "\n";
     //initiate the working buffer's queue
-    std::deque<int>*workingBufferQueue=new std::deque<int>[runNum];
+    std::deque<int>*workingBufferQueue=new std::deque<int>[k];
     // get each run's initial start Position
     int *runStartPosition = new int[runNum];
     for (int i = 0; i < runNum;++i){
@@ -527,8 +528,8 @@ void mergeRuns(){
        std::cout << runCurPosition[i] << " ";
     }
     std::cout << "\n";
-    if (runNum < k){
-      //if num of run is less than k
+    if (runNum <= k){
+      //if num of run is less than or equal to k
       //flag to report the run is over
        bool *isOver = new bool[runNum];
        for (int i = 0; i < runNum;++i){
@@ -597,9 +598,7 @@ void mergeRuns(){
        }
        //set activeOutputBuffer
        int activeOutputBuffer = 0;
-       int curNum = runNum;
        bool isFirst = true;
-       bool test = true;
     //    for (int i = 0; i < runNum;++i){
     //         std::cout << "workingBuffer " << (i) << "'s size is: " << workingBufferQueue[i].size() << "\n";
     //    }
@@ -629,13 +628,13 @@ void mergeRuns(){
         // }
         
         // thread 1: do the k-way-merge in memory
-        std::thread t1(startMerge, &loserTree, &outputBuffer[activeOutputBuffer], freeBuffer, workingBufferQueue, &runNum,&runNotFinishedMergeNum,isOver, &freeIndex);
+        std::thread t1(startMerge, &loserTree, &outputBuffer[activeOutputBuffer], freeBuffer, workingBufferQueue,&runNotFinishedMergeNum,isOver, &freeIndex);
         // thread 2: write the another output buffer's data to the disk
         std::thread t2(writeToDisk, &outputBuffer[(activeOutputBuffer + 1) % 2], &f, isFirst, inputFilePath);
         // wait thread 1 to finish
         t1.join();
         // thread 3: read the run's data that it will first exhaust
-        std::thread t3(readRunData, freeBuffer, &f, outputFilePath, workingBufferQueue, totalRunNum, runCurPosition, runStartPosition, isFirst,isOver,&runNum,dataSize,&freeIndex, bufferSize);
+        std::thread t3(readRunData, freeBuffer, &f, outputFilePath, workingBufferQueue, totalRunNum, totalRunNum, runCurPosition, runStartPosition, isFirst,isOver,&runNum,0,dataSize,&freeIndex, bufferSize);
         // wait thread 2 and thread 3 to finish
         t2.join();
         t3.join();
@@ -646,10 +645,205 @@ void mergeRuns(){
         }
        // write the last output buffer into the disk
         writeToDisk(&outputBuffer[(activeOutputBuffer + 1) % 2], &f, false, inputFilePath);
+    }
+    else{
+        //calculate the merge pass round
+        int passRound = std::log((long double)runNum) / std::log((long double)k);
+        int curRoundNum = runNum;
+        int curRun = 0;
+        // set the curRound Merge's file
+        int writeIndex = 0;
+        int readIndex = 1;
+        //do the Merge
+        while(passRound--){
 
-        
+          //the number that next round
+          int nextRoundNum = 0;
+          //clear the runLength vector
+          runLength.clear();
+          bool isFirst = true;
+          //initial txt
+          std::fstream fout;
+          if (isFirst) {
+           //如果是某一轮次的第一个 outputBuffer输出 则重写文档
+            fout.open(filePath[writeIndex], std::ios::out | std::ios::trunc);
+          }
+          else {
+           fout.open(filePath[writeIndex], std::ios::out | std::ios::app);
+          }
+          fout.close();
+          //std::cerr << "K is: " << k << "\n";
+          // start the round Merge
+          int curRoundTotalNum = curRoundNum;
+          while(curRoundNum>0){
+          //std::cerr << "K is: " << k << "\n"; 
+                //resize the freeBuffer
+                for (int i = 0; i < 2 * k;++i){
+                      freeBuffer[i].resize(bufferSize);
+                }
+                //resize the outputBuffer
+                for (int i = 0; i < 2;++i){
+                      outputBuffer[i].resize(bufferSize);
+                }
+                //clear the freeIndex
+                while(!freeIndex.empty()){
+                      freeIndex.pop();
+                }
+                for (int i = 0; i < 2 * k;++i){
+                      freeIndex.push(i);
+                }
+              if(curRoundNum>=k){
+          //std::cerr << "K is: " << k << "\n";          
+                int runLen = 0;
+                // k - way - merge
+                //  flag to record if the run is read over
+                bool *isOver = new bool[k];
+                for (int i = 0; i < k; ++i){
+                        isOver[i] = false;
+                }
+                // initiate working buffer
+                for (int i = 0; i < k;++i){
+                    int index = freeIndex.front();
+                    workingBufferQueue[i].push_back(index);
+                    freeIndex.pop();
+                }
+                //read data from disk to working buffer
+                for (int i = 0; i < k; ++i){
+                     if ((i != k - 1) && (runCurPosition[curRun+i] + bufferSize <= runStartPosition[curRun + i + 1])){
+                         f.writeToInputBuffer(filePath[readIndex], bufferSize, runCurPosition[curRun +i], &freeBuffer[workingBufferQueue[i].front()]);
+                         runCurPosition[curRun +i] += bufferSize;
+                     }
+                     else if (i == k - 1){
+                         f.writeToInputBuffer(filePath[readIndex], bufferSize, runCurPosition[curRun +i], &freeBuffer[workingBufferQueue[i].front()]);
+                         runCurPosition[curRun +i] += bufferSize;
+                     }
+                    else if (runCurPosition[curRun +i] + bufferSize > runStartPosition[curRun +i + 1]){
+                        f.writeToInputBuffer(filePath[readIndex], runStartPosition[curRun +i + 1] - runCurPosition[curRun +i], runCurPosition[curRun +i], &freeBuffer[workingBufferQueue[i].front()]);
+                        runCurPosition[curRun +i] = runStartPosition[curRun +i + 1];
+                     }
+                }
+                //initiate data
+                //std::cerr << "K is: " << k << "\n";
+                int*treeData = new int[k];
+                //std::cout << "K is: " << k << "\n";
+                for (int i = 0; i < k;++i){
+                     treeData[i] = freeBuffer[workingBufferQueue[i].front()].buffer[0];
+                }
+                //build the loserTree
+                LoserTree loserTree(treeData, k);
+                //find the first run that will exhaust first
+                int key = -1;
+                int minValue = (((1 << 30)-1)*2+1);
+                //std::cout << minValue << "\n";
+                for (int i = 0; i < k;++i){
+                int curSize = freeBuffer[workingBufferQueue[i].back()].getCurSize();
+                   if (freeBuffer[workingBufferQueue[i].back()].buffer[curSize-1]<minValue){
+                       minValue = freeBuffer[workingBufferQueue[i].back()].buffer[curSize - 1];
+                       key = i;
+                    }
+                }
+                int index = freeIndex.front();
+                freeIndex.pop();
+                workingBufferQueue[key].push_back(index);
+                //write data to the buffer
+                if(key==k-1){
+                     f.writeToInputBuffer(filePath[readIndex], bufferSize, runCurPosition[curRun+key], &freeBuffer[index]);
+                     runCurPosition[curRun+key] += bufferSize;
+                }
+                else if(runCurPosition[curRun+key]+bufferSize<=runStartPosition[curRun+key+1]){
+                     f.writeToInputBuffer(filePath[readIndex], bufferSize, runCurPosition[curRun+key], &freeBuffer[index]);
+                     runCurPosition[curRun+key] += bufferSize;            
+                }
+                else if(runCurPosition[curRun+key]+bufferSize>runStartPosition[curRun+key+1]){
+                     f.writeToInputBuffer(filePath[readIndex], runStartPosition[curRun+key + 1] - runCurPosition[curRun+key],runCurPosition[curRun+key],&freeBuffer[index]);
+                     runCurPosition[curRun+key] = runStartPosition[curRun+key + 1];
+                }
+                //set activeOutputBuffer
+                int activeOutputBuffer = 0;
+                int totalRunNum = k;
+                int runNotMergeFinished = k;
+                int curRunNum = k;
+                while((runNotMergeFinished>0)){
+                     for (int i = 0; i < k;++i){
 
-  }
+                       std::cout << "Run " <<(i+curRun) << " curPos: " << runCurPosition[curRun+i] << " endAt: " << runStartPosition[curRun+i + 1] << "\n";
+                       
+                     }
+                    // thread 1: do the k-way-merge in memory
+                    std::thread t1(startMerge, &loserTree, &outputBuffer[activeOutputBuffer], freeBuffer, workingBufferQueue, &runNotMergeFinished, isOver, &freeIndex);
+                     // thread 2: write the another output buffer's data to the disk
+                     std::thread t2(writeToDisk, &outputBuffer[(activeOutputBuffer + 1) % 2], &f, isFirst, filePath[writeIndex]);
+                     // wait thread 1 to finish
+                     t1.join();
+                     // thread 3: read the run's data that it will first exhaust
+                     std::thread t3(readRunData, freeBuffer, &f, filePath[readIndex], workingBufferQueue, k,curRoundTotalNum, runCurPosition, runStartPosition, isFirst, isOver, &curRunNum, curRun, dataSize, &freeIndex, bufferSize);
+                     // wait thread 2 and thread 3 to finish
+                     t2.join();
+                     t3.join();
+                     // update runLen
+                     runLen += outputBuffer[(activeOutputBuffer + 1) % 2].getCurSize();
+                     isFirst = false;
+                     activeOutputBuffer = (activeOutputBuffer + 1) % 2;
+                }
+                // write the last output buffer into the disk
+                writeToDisk(&outputBuffer[(activeOutputBuffer + 1) % 2], &f, false, filePath[writeIndex]);
+                runLen += outputBuffer[(activeOutputBuffer + 1) % 2].getCurSize();
+                //update curRoundNum
+                curRoundNum -= k;
+                //update curRun
+                curRun += k;
+                //add the runLen to the vector
+                std::cout << "RunLen is: " <<runLen << "\n";
+                runLength.push_back(runLen);
+                ++nextRoundNum;
+                //reset runLen
+                runLen = 0;
+                //free the memory
+                delete[] treeData;
+              }
+              else{
+                 //curRoundNum - way - merge
+
+              }
+          }
+          //delete the memory
+          delete[] runCurPosition;
+          delete[] runStartPosition;
+          //Reset the run's info
+          runCurPosition = new int[nextRoundNum];
+          runStartPosition = new int[nextRoundNum];
+          for (int i = 0; i < nextRoundNum;++i){
+              if(i==0){
+                runStartPosition[i] = 0;
+              }
+              else{
+                runStartPosition[i] = runStartPosition[i - 1] + runLength[i - 1];
+              }
+          }
+          std::cout << "runStartPosition\n";
+          for (int i = 0; i < nextRoundNum;++i){
+              runCurPosition[i] = runStartPosition[i];
+          }
+          for (int i = 0; i < nextRoundNum;++i){
+              std::cout << runStartPosition[i] << " ";
+          }
+          std::cout << "\n";
+          std::cout << "runCurPosition:\n";
+          for (int i = 0; i < nextRoundNum;++i){
+              std::cout << runCurPosition[i] << " ";
+          }
+          std::cout << "\n";
+          // reset the read and write path
+          writeIndex = (writeIndex + 1) % 2;
+          readIndex = (readIndex + 1) % 2;
+          //reset the isFirst flag
+          isFirst = true;
+          //reset the curRun
+          curRun = 0;
+          //set the curRound num
+          curRoundNum = nextRoundNum;
+        }
+    }
     
 }
 int main() {
