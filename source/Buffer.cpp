@@ -25,14 +25,19 @@ Buffer::Buffer(const Buffer& b) {
     this->curSize = b.curSize;
     this->isEmpty = b.isEmpty;
     this->isFull = b.isFull;
-    this->resize(this->curSize);
-    for (int i = 0; i < this->bufferSize; ++i) {
+    this->resize(this->bufferSize);
+    for (int i = 0; i < this->curSize; ++i) {
         this->buffer[i] = b.buffer[i];
     }
 }
 void Buffer::moveCurPos() {
     //更新curPos的函数
     this->curLocation += 1;
+}
+void Buffer::backCurPos(){
+    //回溯curPos的函数
+    this->curLocation -= 1;
+    --this->curSize;
 }
 int Buffer::getBufferSize() {
     return this->bufferSize;
