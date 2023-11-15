@@ -47,7 +47,7 @@ void FileOperator::writeToInputBuffer(std::string filepath, int predictSize, int
     fin.close();
 }
 void FileOperator::writeToFile(std::string filepath, int predictSize, bool isFirst, Buffer* outputBuffer) {
-    int bufferSize = outputBuffer->getBufferSize();
+    int bufferSize = outputBuffer->getCurSize();
     // 如果预测大小与实际提供的 buffer大小不同  则输出错误信息
     if ( predictSize>bufferSize) {
         std::cerr << "The predict size is bigger than the buffer's size !"

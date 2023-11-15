@@ -1,0 +1,8 @@
+size 5000 5 64 k= 2 mBuffersize=4 6.57534s
+size 5000 5 64 k= 4 mBuffersize=4 3.18s
+size 5000 5 64 k= 8 mBuffersize=4 2.34s
+size 10000 5 128 k= 2 mBuffersize=2 21.629s
+size 10000 5 128 k= 4 mBuffersize=3 11.001s
+size 10000 5 128 k= 8 mBuffersize=3 8.29129s
+size 10000 5 128 k= 16 mBuffersize=3 8.23821s
+size 10000 5 128 k= 32 mBuffersize=3 7.89584s 
