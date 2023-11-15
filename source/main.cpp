@@ -9,6 +9,8 @@
 #include "LoserTree.hpp"
 #include "FileOperator.hpp"
 #include "Timer.hpp"
+//int curRunNum
+int currentRunNum = 0;
 //vector that store the each run's length
 std::vector<int>runLength;
 //for get the best mergesequence
@@ -74,6 +76,7 @@ void readRunData(Buffer*freeBuffer,FileOperator*fileOperator,std::string filePat
     if(isFirst){
         return;
     }
+    char runPath[128];
     //find the run that will exhaust first
     int key = -1;
     int minValue = (((1 << 30) - 1) * 2 + 1);
@@ -99,65 +102,20 @@ void readRunData(Buffer*freeBuffer,FileOperator*fileOperator,std::string filePat
     //add the new Key to the working buffer queue
     workingBufferQueue[key].push_back(newKey);
     //update run's cur pos
-    if((key+startPos)==(runNum-1)&&(dataSize>runCurPosition[key+startPos])){
-        int predictSize = (bufferSize + runCurPosition[startPos + key] > dataSize) ? (dataSize - runCurPosition[startPos + key]) : bufferSize;
-        fileOperator->writeToInputBuffer(filePath, predictSize, runCurPosition[startPos + key], &freeBuffer[workingBufferQueue[key].back()]);
-        runCurPosition[startPos + key] += freeBuffer[workingBufferQueue[key].back()].getCurSize();
-        //std::cout << "Case 1\n";
-    }
-    else if(runCurPosition[startPos+key]+bufferSize<=runStartPosition[startPos+key+1]){
-        fileOperator->writeToInputBuffer(filePath, bufferSize, runCurPosition[startPos+key], &freeBuffer[workingBufferQueue[key].back()]);
+    if(runCurPosition[startPos+key]+bufferSize<=runLength[startPos+key]){
+        sprintf(runPath, "Run\\Run%d.txt", startPos + key);
+        fileOperator->writeToInputBuffer(runPath, bufferSize, runCurPosition[startPos+key], &freeBuffer[newKey]);
         runCurPosition[startPos+key] += bufferSize;
-        //std::cout << "Case 2\n";
-    }
-    else if((runCurPosition[startPos+key]+bufferSize>runStartPosition[startPos+key+1])&&(startPos+key!=runNum-1)&&(runCurPosition[startPos+key]<runStartPosition[startPos+key+1])){
-        fileOperator->writeToInputBuffer(filePath, runStartPosition[startPos+key + 1] - runCurPosition[startPos+key],runCurPosition[startPos+key],&freeBuffer[workingBufferQueue[key].back()]);
-        runCurPosition[startPos+key] = runStartPosition[startPos+key + 1];
-        //std::cout << "Case 3\n";
-    }
-    else if((runCurPosition[startPos+key]==runStartPosition[startPos+key+1])){
-        //the run is over
-        //std::cout << "Case 4\n";
-        if(freeBuffer[workingBufferQueue[key].back()].getCurSize()==0){
-               //the run is over
-               //1.resize the buffer
-               freeBuffer[workingBufferQueue[key].back()].resize(bufferSize);
-               //2. pop_back it
-               workingBufferQueue[key].pop_back();
-               //3  push it to the freeIndex
-               freeIndex->push(newKey);
-        }
-        return;
-    }  
-    else if((key+startPos)==(runNum-1)){
-        //std::cout << "Case 5\n";
-        isOver[runNum - 1] = true;
-        --*curRunNum;
-        if(freeBuffer[workingBufferQueue[key].back()].getCurSize()==0){
-               //the run is over
-               //1.resize the buffer
-               freeBuffer[workingBufferQueue[key].back()].resize(bufferSize);
-               //2. pop_back it
-               workingBufferQueue[key].pop_back();
-               //3  push it to the freeIndex
-               freeIndex->push(newKey);
-        }
-        return;
-    }
-    //set the over info and curRunNum info
-    if((key+startPos)==(runNum-1)){
-        //if the last run is over, then return
-        if(isOver[key]){
-            return;
-        }
-        //if the last run's data has all been read, set the run's status to over 
-        if(runCurPosition[startPos+key]>=dataSize&&(!isOver[key])){
-            isOver[key] = true;
-            --*curRunNum;
-        }
 
     }
-    else if(runCurPosition[startPos+key]==runStartPosition[startPos+key+1]){
+    else if((runCurPosition[startPos+key]+bufferSize>runLength[startPos+key])&&(runCurPosition[startPos+key]<runLength[startPos+key])){
+        sprintf(runPath, "Run\\Run%d.txt", startPos + key);
+        fileOperator->writeToInputBuffer(runPath, runLength[startPos+key] - runCurPosition[startPos+key],runCurPosition[startPos+key],&freeBuffer[newKey]);
+        runCurPosition[startPos+key] = runLength[startPos+key];
+
+    }
+    //set the over info and curRunNum info
+    if(runCurPosition[startPos+key]>=runLength[startPos+key]){
         //the run is over
         if(isOver[key]){
             return;
@@ -168,7 +126,8 @@ void readRunData(Buffer*freeBuffer,FileOperator*fileOperator,std::string filePat
         }
     }
     //std::cout << freeBuffer[workingBufferQueue[key].back()].getCurSize() << "\n";
-    if(freeBuffer[workingBufferQueue[key].back()].getCurSize()==0){
+    int curSize=freeBuffer[workingBufferQueue[key].back()].getCurSize();
+    if(curSize==0){
        //the run is over
        //1.resize the buffer
         freeBuffer[workingBufferQueue[key].back()].resize(bufferSize);
@@ -176,16 +135,6 @@ void readRunData(Buffer*freeBuffer,FileOperator*fileOperator,std::string filePat
         workingBufferQueue[key].pop_back();
        //3  push it to the freeIndex
         freeIndex->push(newKey);
-    }
-    else{
-     //std::cout << "Update Run " << key <<" at FreeBuffer: " <<workingBufferQueue[key].back()<<"\n";
-     if(key!=runNum-1){
-     //std::cout << "CurPos: " << runCurPosition[key] <<" End At: " <<runStartPosition[key+1]<<"\n";
-     }
-    //  for (int i = 0; i < freeBuffer[newKey].getCurSize();++i){
-    //     std::cout << freeBuffer[newKey].buffer[i] << " ";
-    //  }
-    //  std::cout << "\n";
     }
 }
 //k-way-merge
@@ -281,6 +230,37 @@ void startMerge(LoserTree*loserTree,Buffer*outputBuffer,Buffer*freeBuffer,std::d
         }
 
     }
+}
+void createRuns(std::string filePath){
+    FileOperator file;
+    std::fstream ifs;
+    ifs.open(filePath, std::ios::in);
+    std::string line;
+    char dataOutputPath[128];
+    int curPos = 0;
+    int curNum = 0;
+    std::fstream ofs;
+    sprintf(dataOutputPath, "Run\\Run%d.txt", curNum);
+    ofs.open(dataOutputPath,std::ios::out);
+    while(std::getline(ifs,line)){
+        if(curPos<runLength[curNum]){
+            ofs << line;
+            ofs << "\n";
+            ++curPos;
+
+        }
+        else{
+            ofs.close();
+            curPos = 0;
+            ++curNum;
+            sprintf(dataOutputPath, "Run\\Run%d.txt", curNum);
+            ofs.open(dataOutputPath,std::ios::out);
+            ofs << line;
+            ofs << "\n";
+            ++curPos;
+        }
+    }
+    ifs.close();
 }
 void startSort(int bufferSize,int treeSize) {
     FileOperator file;
@@ -408,9 +388,7 @@ void startSort(int bufferSize,int treeSize) {
 
     }
     writeToDisk(&finalBuffer, &fileOperator,false,"Output.txt");
-
-
-   
+    createRuns("Output.txt");
 }
 //get Best Merge Sequence
 void getBestMergeSequence() {
@@ -479,6 +457,7 @@ void mergeRuns(int k,int bufferSize){
     //the input and output file path
     std::string inputFilePath = "Input.txt";
     std::string outputFilePath = "Output.txt";
+    char runPath[128];
     //the vector that store the file path
     std::vector<std::string> filePath;
     filePath.push_back(inputFilePath);
@@ -534,7 +513,7 @@ void mergeRuns(int k,int bufferSize){
     //initial each run's curPosition
     int *runCurPosition = new int[runNum];
     for (int i = 0; i < runNum; ++i){
-       runCurPosition[i] = runStartPosition[i];
+        runCurPosition[i] = 0;
     }
     std::cout << "runStartPosition: \n";
     for (int i = 0; i < runNum;++i){
@@ -562,18 +541,15 @@ void mergeRuns(int k,int bufferSize){
        }
        //read data from disk to working buffer
         for (int i = 0; i < runNum; ++i){
-          if ((i != runNum - 1) && (runCurPosition[i] + bufferSize <= runStartPosition[i + 1])){
-              f.writeToInputBuffer(outputFilePath, bufferSize, runCurPosition[i], &freeBuffer[workingBufferQueue[i].front()]);
+          if (runCurPosition[i] + bufferSize <= runLength[i]){
+              sprintf(runPath, "Run\\Run%d.txt", i);
+              f.writeToInputBuffer(runPath, bufferSize, runCurPosition[i], &freeBuffer[workingBufferQueue[i].front()]);
               runCurPosition[i] += bufferSize;
             }
-          else if ((i == runNum - 1)&&(dataSize>runCurPosition[i])){
-              int predictSize = (runCurPosition[i] + bufferSize > dataSize) ? (dataSize - runCurPosition[i]) : bufferSize;
-              f.writeToInputBuffer(outputFilePath, predictSize, runCurPosition[i], &freeBuffer[workingBufferQueue[i].front()]);
-              runCurPosition[i] += predictSize;
-            }
-          else if (runCurPosition[i] + bufferSize > runStartPosition[i + 1]&&(i!=runNum-1)){
-              f.writeToInputBuffer(outputFilePath, runStartPosition[i + 1] - runCurPosition[i], runCurPosition[i], &freeBuffer[workingBufferQueue[i].front()]);
-              runCurPosition[i] = runStartPosition[i + 1];
+          else if (runCurPosition[i] + bufferSize > runLength[i]){
+              sprintf(runPath, "Run\\Run%d.txt", i);
+              f.writeToInputBuffer(runPath, runLength[i] - runCurPosition[i], runCurPosition[i], &freeBuffer[workingBufferQueue[i].front()]);
+              runCurPosition[i] = runLength[i];
             }
         }
        //initiate data
@@ -603,19 +579,27 @@ void mergeRuns(int k,int bufferSize){
        freeIndex.pop();
        workingBufferQueue[key].push_back(index);
        //write data to the buffer
-       if((key==runNum-1)&&(dataSize>runCurPosition[key])){
-          int predictSize = (runCurPosition[key] + bufferSize > dataSize) ? (dataSize - runCurPosition[key]): bufferSize;
-          f.writeToInputBuffer(outputFilePath, predictSize, runCurPosition[key], &freeBuffer[index]);
-          runCurPosition[key] += freeBuffer[index].getCurSize();
+
+       if(runCurPosition[key]+bufferSize<=runLength[key]){
+           sprintf(runPath, "Run\\Run%d.txt", key);
+           f.writeToInputBuffer(runPath, bufferSize, runCurPosition[key], &freeBuffer[index]);
+           runCurPosition[key] += bufferSize;            
        }
-       else if(runCurPosition[key]+bufferSize<=runStartPosition[key+1]){
-            f.writeToInputBuffer(outputFilePath, bufferSize, runCurPosition[key], &freeBuffer[index]);
-            runCurPosition[key] += bufferSize;            
+       else if(runCurPosition[key]+bufferSize>runLength[key]){
+            sprintf(runPath, "Run\\Run%d.txt", key);
+            f.writeToInputBuffer(runPath, runLength[key] - runCurPosition[key],runCurPosition[key],&freeBuffer[index]);
+            runCurPosition[key] = runLength[key];
        }
-       else if(runCurPosition[key]+bufferSize>runStartPosition[key+1]&&(key!=runNum-1)){
-            f.writeToInputBuffer(outputFilePath, runStartPosition[key + 1] - runCurPosition[key],runCurPosition[key],&freeBuffer[index]);
-            runCurPosition[key] = runStartPosition[key + 1];
-       }
+       int curSize = freeBuffer[workingBufferQueue[key].back()].getCurSize();
+       if(curSize==0){
+                   //the run is over
+                   //1.resize the buffer
+                   freeBuffer[workingBufferQueue[key].back()].resize(bufferSize);
+                   //2. pop_back it
+                   workingBufferQueue[key].pop_back();
+                   //3  push it to the freeIndex
+                   freeIndex.push(index);
+        }
        //set activeOutputBuffer
        int activeOutputBuffer = 0;
        bool isFirst = true;
@@ -626,31 +610,31 @@ void mergeRuns(int k,int bufferSize){
        std::fstream fout;
        if (isFirst) {
         //如果是某一轮次的第一个 outputBuffer输出 则重写文档
-        fout.open("Input.txt", std::ios::out | std::ios::trunc);
+        fout.open(outputFilePath, std::ios::out | std::ios::trunc);
        }
        else {
         
-        fout.open("Input.txt", std::ios::out | std::ios::app);
+        fout.open(outputFilePath, std::ios::out | std::ios::app);
        }
        fout.close();
        int totalRunNum = runNum;
        while((runNotFinishedMergeNum>0)){
-        // for (int i = 0; i < totalRunNum;++i){
-        //       std::cout << "Run " << i << "'s data: \n";
-        //       for (int j = 0; j <workingBufferQueue[i].size();++j){
-        //             std::cout << "FreeBuffer " << workingBufferQueue[i].at(j) <<"\n";
-        //             for (int k = 0; k < freeBuffer[workingBufferQueue[i].at(j)].getCurSize();++k){
-        //                 std::cout << freeBuffer[workingBufferQueue[i].at(j)].buffer[k] << " ";
-        //             }
-        //             std::cout << "\n";
-        //       }
-        //       std::cout << "\n";
-        // }
+        for (int i = 0; i < totalRunNum;++i){
+              std::cout << "Run " << i << "'s data: \n";
+              for (int j = 0; j <workingBufferQueue[i].size();++j){
+                    std::cout << "FreeBuffer " << workingBufferQueue[i].at(j) <<"\n";
+                    for (int k = 0; k < freeBuffer[workingBufferQueue[i].at(j)].getCurSize();++k){
+                        std::cout << freeBuffer[workingBufferQueue[i].at(j)].buffer[k] << " ";
+                    }
+                    std::cout << "\n";
+              }
+              std::cout << "\n";
+        }
         
         // thread 1: do the k-way-merge in memory
         std::thread t1(startMerge, &loserTree, &outputBuffer[activeOutputBuffer], freeBuffer, workingBufferQueue,&runNotFinishedMergeNum,isOver, &freeIndex);
         // thread 2: write the another output buffer's data to the disk
-        std::thread t2(writeToDisk, &outputBuffer[(activeOutputBuffer + 1) % 2], &f, isFirst, inputFilePath);
+        std::thread t2(writeToDisk, &outputBuffer[(activeOutputBuffer+1)%2], &f, isFirst, outputFilePath);
         // wait thread 1 to finish
         t1.join();
         // thread 3: read the run's data that it will first exhaust
@@ -664,7 +648,7 @@ void mergeRuns(int k,int bufferSize){
         activeOutputBuffer = (activeOutputBuffer + 1) % 2;
         }
        // write the last output buffer into the disk
-        writeToDisk(&outputBuffer[(activeOutputBuffer + 1) % 2], &f, false, inputFilePath);
+        writeToDisk(&outputBuffer[(activeOutputBuffer + 1) % 2], &f, false, outputFilePath);
     }
     else{
         //calculate the merge pass round
@@ -675,22 +659,25 @@ void mergeRuns(int k,int bufferSize){
         // set the curRound Merge's file
         int writeIndex = 0;
         int readIndex = 1;
+        //runPath
+        char runPath[128];
+        std::vector<int> nextRoundRunLength;
         //do the Merge
         while((passRound--)>0){
 
           //the number that next round
           int nextRoundNum = 0;
-          //clear the runLength vector
-          runLength.clear();
+          //clear the nextRoundRunLength vector
+          nextRoundRunLength.clear();
           bool isFirst = true;
           //initial txt
           std::fstream fout;
           if (isFirst) {
            //如果是某一轮次的第一个 outputBuffer输出 则重写文档
-            fout.open(filePath[writeIndex], std::ios::out | std::ios::trunc);
+            fout.open(outputFilePath, std::ios::out | std::ios::trunc);
           }
           else {
-           fout.open(filePath[writeIndex], std::ios::out | std::ios::app);
+           fout.open(outputFilePath, std::ios::out | std::ios::app);
           }
           fout.close();
           //std::cerr << "K is: " << k << "\n";
@@ -729,19 +716,17 @@ void mergeRuns(int k,int bufferSize){
                 }
                 //read data from disk to working buffer
                 for (int i = 0; i < k; ++i){
-                     if ((i+curRun) != (curRoundTotalNum - 1) && (runCurPosition[curRun+i] + bufferSize <= runStartPosition[curRun + i + 1])){
-                         f.writeToInputBuffer(filePath[readIndex], bufferSize, runCurPosition[curRun +i], &freeBuffer[workingBufferQueue[i].front()]);
+                     if (runCurPosition[curRun+i] + bufferSize <= runLength[curRun+i]){
+                         sprintf(runPath, "Run\\Run%d.txt", curRun+i);
+                         f.writeToInputBuffer(runPath, bufferSize, runCurPosition[curRun +i], &freeBuffer[workingBufferQueue[i].front()]);
                          runCurPosition[curRun +i] += bufferSize;
                      }
-                     else if ((i+curRun) == (curRoundTotalNum - 1)&&(dataSize>runCurPosition[i+curRun])){
-                         int predictSize = (runCurPosition[i + curRun] + bufferSize > dataSize) ? (dataSize - runCurPosition[i + curRun]) : bufferSize;
-                         f.writeToInputBuffer(filePath[readIndex], predictSize, runCurPosition[curRun +i], &freeBuffer[workingBufferQueue[i].front()]);
-                         runCurPosition[curRun +i] += freeBuffer[workingBufferQueue[i].front()].getCurSize();
-                     }
-                    else if ((runCurPosition[curRun +i] + bufferSize > runStartPosition[curRun +i + 1])&&(i+curRun!=curRoundTotalNum-1)){
-                        f.writeToInputBuffer(filePath[readIndex], runStartPosition[curRun +i + 1] - runCurPosition[curRun +i], runCurPosition[curRun +i], &freeBuffer[workingBufferQueue[i].front()]);
-                        runCurPosition[curRun +i] = runStartPosition[curRun +i + 1];
-                     }
+                     else if (runCurPosition[curRun+i]+bufferSize>runLength[curRun+i]&&(runCurPosition[curRun+i]<runLength[curRun+i])){
+                         sprintf(runPath, "Run\\Run%d.txt", curRun + i);
+                         f.writeToInputBuffer(runPath, runLength[curRun+i]-runCurPosition[curRun+i], runCurPosition[curRun +i], &freeBuffer[workingBufferQueue[i].front()]);
+                         runCurPosition[curRun + i] = runLength[curRun + i];
+                        }
+
                 }
                 //initiate data
                 //std::cerr << "K is: " << k << "\n";
@@ -773,18 +758,26 @@ void mergeRuns(int k,int bufferSize){
                 freeIndex.pop();
                 workingBufferQueue[key].push_back(index);
                 //write data to the buffer
-                if((key+curRun)==(curRoundTotalNum-1)&&(dataSize>runCurPosition[key+curRun])){
-                    int predictSize = (runCurPosition[key + curRun] + bufferSize > dataSize) ? (dataSize - runCurPosition[key + curRun]) : bufferSize;
-                    f.writeToInputBuffer(filePath[readIndex], predictSize, runCurPosition[curRun + key], &freeBuffer[index]);
-                    runCurPosition[curRun + key] += freeBuffer[index].getCurSize();
+
+                if(runCurPosition[curRun+key]+bufferSize<=runLength[curRun+key]){
+                    sprintf(runPath, "Run\\Run%d.txt", key + curRun);
+                    f.writeToInputBuffer(runPath, bufferSize, runCurPosition[curRun + key], &freeBuffer[index]);
+                    runCurPosition[curRun + key] += bufferSize;            
                 }
-                else if(runCurPosition[curRun+key]+bufferSize<=runStartPosition[curRun+key+1]){
-                     f.writeToInputBuffer(filePath[readIndex], bufferSize, runCurPosition[curRun+key], &freeBuffer[index]);
-                     runCurPosition[curRun+key] += bufferSize;            
+                else if(runCurPosition[curRun+key]+bufferSize>runLength[curRun+key]&&(runCurPosition[curRun+key]<runLength[curRun+key])){
+                     sprintf(runPath, "Run\\Run%d.txt", key + curRun);
+                     f.writeToInputBuffer(runPath,runLength[curRun+key] - runCurPosition[curRun+key],runCurPosition[curRun+key],&freeBuffer[index]);
+                     runCurPosition[curRun + key] = runLength[curRun + key];
                 }
-                else if(runCurPosition[curRun+key]+bufferSize>runStartPosition[curRun+key+1]&&(key+curRun!=curRoundTotalNum-1)){
-                     f.writeToInputBuffer(filePath[readIndex], runStartPosition[curRun+key + 1] - runCurPosition[curRun+key],runCurPosition[curRun+key],&freeBuffer[index]);
-                     runCurPosition[curRun+key] = runStartPosition[curRun+key + 1];
+                int curSize = freeBuffer[workingBufferQueue[key].back()].getCurSize();
+                if(curSize==0){
+                   //the run is over
+                   //1.resize the buffer
+                   freeBuffer[workingBufferQueue[key].back()].resize(bufferSize);
+                   //2. pop_back it
+                   workingBufferQueue[key].pop_back();
+                   //3  push it to the freeIndex
+                   freeIndex.push(index);
                 }
                 //set activeOutputBuffer
                 int activeOutputBuffer = 0;
@@ -807,12 +800,12 @@ void mergeRuns(int k,int bufferSize){
                     // thread 1: do the k-way-merge in memory
                     std::thread t1(startMerge, &loserTree, &outputBuffer[activeOutputBuffer], freeBuffer, workingBufferQueue, &runNotMergeFinished, isOver, &freeIndex);
                      // thread 2: write the another output buffer's data to the disk
-                     std::thread t2(writeToDisk, &outputBuffer[(activeOutputBuffer + 1) % 2], &f, isFirst, filePath[writeIndex]);
+                     std::thread t2(writeToDisk, &outputBuffer[(activeOutputBuffer+1)%2], &f, isFirst, outputFilePath);
                      // wait thread 1 to finish
                      t1.join();
                      //std::cout << "Merge Success\n";
                      // thread 3: read the run's data that it will first exhaust
-                     std::thread t3(readRunData, freeBuffer, &f, filePath[readIndex], workingBufferQueue, k,curRoundTotalNum, runCurPosition, runStartPosition, isFirst, isOver, &curRunNum, curRun, dataSize, &freeIndex, bufferSize);
+                     std::thread t3(readRunData, freeBuffer, &f, inputFilePath, workingBufferQueue, k,curRoundTotalNum, runCurPosition, runStartPosition, isFirst, isOver, &curRunNum, curRun, dataSize, &freeIndex, bufferSize);
                      // wait thread 2 and thread 3 to finish
                      t2.join();
                      //std::cout << "Write Success\n";
@@ -824,7 +817,7 @@ void mergeRuns(int k,int bufferSize){
                      activeOutputBuffer = (activeOutputBuffer + 1) % 2;
                 }
                 // write the last output buffer into the disk
-                writeToDisk(&outputBuffer[(activeOutputBuffer + 1) % 2], &f, false, filePath[writeIndex]);
+                writeToDisk(&outputBuffer[(activeOutputBuffer + 1) % 2], &f, false, outputFilePath);
                 runLen += outputBuffer[(activeOutputBuffer + 1) % 2].getCurSize();
                 //update curRoundNum
                 curRoundNum -= k;
@@ -832,7 +825,7 @@ void mergeRuns(int k,int bufferSize){
                 curRun += k;
                 //add the runLen to the vector
                 //std::cout << "RunLen is: " <<runLen << "\n";
-                runLength.push_back(runLen);
+                nextRoundRunLength.push_back(runLen);
                 ++nextRoundNum;
                 //reset runLen
                 runLen = 0;
@@ -854,20 +847,18 @@ void mergeRuns(int k,int bufferSize){
                     workingBufferQueue[i].push_back(index);
                     freeIndex.pop();
                 }
+
                 //read data from disk to working buffer
                 for (int i = 0; i < curRoundNum; ++i){
-                     if (((i+curRun)!= (curRoundTotalNum-1)) && (runCurPosition[curRun+i] + bufferSize <= runStartPosition[curRun + i + 1])){
-                         f.writeToInputBuffer(filePath[readIndex], bufferSize, runCurPosition[curRun +i], &freeBuffer[workingBufferQueue[i].front()]);
+                     if (runCurPosition[curRun+i] + bufferSize <= runLength[curRun + i]){
+                         sprintf(runPath, "Run\\Run%d.txt", curRun + i);
+                         f.writeToInputBuffer(runPath, bufferSize, runCurPosition[curRun +i], &freeBuffer[workingBufferQueue[i].front()]);
                          runCurPosition[curRun +i] += bufferSize;
                      }
-                     else if ((i+curRun) == (curRoundTotalNum - 1)&&(dataSize>runCurPosition[i+curRun])){
-                         int predictSize = (runCurPosition[i + curRun] + bufferSize > dataSize) ? (dataSize - runCurPosition[i + curRun]) : bufferSize;
-                         f.writeToInputBuffer(filePath[readIndex], predictSize, runCurPosition[curRun +i], &freeBuffer[workingBufferQueue[i].front()]);
-                         runCurPosition[curRun +i] += freeBuffer[workingBufferQueue[i].front()].getCurSize();
-                     }
-                    else if (runCurPosition[curRun +i] + bufferSize > runStartPosition[curRun +i + 1]&&(i+curRun!=curRoundTotalNum-1)){
-                        f.writeToInputBuffer(filePath[readIndex], runStartPosition[curRun +i + 1] - runCurPosition[curRun +i], runCurPosition[curRun +i], &freeBuffer[workingBufferQueue[i].front()]);
-                        runCurPosition[curRun +i] = runStartPosition[curRun +i + 1];
+                     else if (runCurPosition[curRun+i]+bufferSize>runLength[curRun+i]&&(runCurPosition[curRun+i]<runLength[curRun+i])){
+                         sprintf(runPath, "Run\\Run%d.txt", curRun + i);
+                         f.writeToInputBuffer(runPath,runLength[curRun+i]-runCurPosition[curRun+i] , runCurPosition[curRun +i], &freeBuffer[workingBufferQueue[i].front()]);
+                         runCurPosition[curRun + i] = runLength[curRun + i];
                      }
                 }
                 //initiate data
@@ -893,56 +884,65 @@ void mergeRuns(int k,int bufferSize){
                 freeIndex.pop();
                 workingBufferQueue[key].push_back(index);
                 //write data to the buffer
-                if((key+curRun)==(curRoundTotalNum-1)&&(dataSize>runCurPosition[key+curRun])){
-                    int predictSize = (runCurPosition[key + curRun] + bufferSize > dataSize) ? (dataSize - runCurPosition[key + curRun]) : bufferSize;
-                    f.writeToInputBuffer(filePath[readIndex], predictSize, runCurPosition[curRun + key], &freeBuffer[index]);
-                    runCurPosition[curRun + key] += freeBuffer[index].getCurSize();
+
+                if(runCurPosition[curRun+key]+bufferSize<=runLength[curRun+key]){
+                    sprintf(runPath, "Run\\Run%d.txt", curRun + key);
+                    f.writeToInputBuffer(runPath, bufferSize, runCurPosition[curRun + key], &freeBuffer[index]);
+                    runCurPosition[curRun + key] += bufferSize;            
                 }
-                else if(runCurPosition[curRun+key]+bufferSize<=runStartPosition[curRun+key+1]){
-                     f.writeToInputBuffer(filePath[readIndex], bufferSize, runCurPosition[curRun+key], &freeBuffer[index]);
-                     runCurPosition[curRun+key] += bufferSize;            
+                else if(runCurPosition[curRun+key]+bufferSize>runLength[curRun+key]&&(runCurPosition[curRun+key]<runLength[curRun+key])){
+                     sprintf(runPath, "Run\\Run%d.txt", curRun + key);
+                     f.writeToInputBuffer(filePath[readIndex], runLength[curRun+key ] - runCurPosition[curRun+key],runCurPosition[curRun+key],&freeBuffer[index]);
+                     runCurPosition[curRun + key] = runLength[curRun + key];
                 }
-                else if(runCurPosition[curRun+key]+bufferSize>runStartPosition[curRun+key+1]&&(curRun+key!=curRoundTotalNum-1)){
-                     f.writeToInputBuffer(filePath[readIndex], runStartPosition[curRun+key + 1] - runCurPosition[curRun+key],runCurPosition[curRun+key],&freeBuffer[index]);
-                     runCurPosition[curRun+key] = runStartPosition[curRun+key + 1];
+                int curSize=freeBuffer[workingBufferQueue[key].back()].getCurSize();
+                if(curSize==0){
+                //the run is over
+                //1.resize the buffer
+                freeBuffer[workingBufferQueue[key].back()].resize(bufferSize);
+                //2. pop_back it
+                workingBufferQueue[key].pop_back();
+                //3  push it to the freeIndex
+                freeIndex.push(index);
                 }
-                //set activeOutputBuffer
+                // set activeOutputBuffer
                 int activeOutputBuffer = 0;
                 int totalRunNum = curRoundNum;
                 int runNotMergeFinished = curRoundNum;
                 int curRunNum = curRoundNum;
-                while((runNotMergeFinished>0)){
-                    //  for (int i = 0; i < curRoundNum;++i){
-                    //    std::cout << "Run " << i << "\n";
-                    //    for (int j = 0; j < workingBufferQueue[i].size();++j){
-                    //        std::cout << "Buffer " << workingBufferQueue[i].at(j) << "\n";
-                    //        for (int z = 0; z < freeBuffer[workingBufferQueue[i].at(j)].getCurSize();++z){
-                    //            std::cout << freeBuffer[workingBufferQueue[i].at(j)].buffer[z] << " ";
-                    //        }
-                    //        std::cout << "\n";
-                    //    }
-                    //  }
-                     // thread 1: do the k-way-merge in memory
-                     std::thread t1(startMerge, &loserTree, &outputBuffer[activeOutputBuffer], freeBuffer, workingBufferQueue, &runNotMergeFinished, isOver, &freeIndex);
-                     // thread 2: write the another output buffer's data to the disk
-                     std::thread t2(writeToDisk, &outputBuffer[(activeOutputBuffer + 1) % 2], &f, isFirst, filePath[writeIndex]);
-                     // wait thread 1 to finish
-                     t1.join();
-                     //std::cout << "Successfully merged\n";
-                     // thread 3: read the run's data that it will first exhaust
-                     std::thread t3(readRunData, freeBuffer, &f, filePath[readIndex], workingBufferQueue, totalRunNum,curRoundTotalNum, runCurPosition, runStartPosition, isFirst, isOver, &curRunNum, curRun, dataSize, &freeIndex, bufferSize);
-                     // wait thread 2 and thread 3 to finish
-                     t2.join();
-                     //std::cout << "Successfully write\n";
-                     t3.join();
-                     //std::cout << "Successfully read\n";
-                     // update runLen
-                     runLen += outputBuffer[(activeOutputBuffer + 1) % 2].getCurSize();
-                     isFirst = false;
-                     activeOutputBuffer = (activeOutputBuffer + 1) % 2;
+                     while ((runNotMergeFinished > 0))
+                     {
+                          for (int i = 0; i < curRoundNum;++i){
+                            std::cout << "Run " << i << "\n";
+                            for (int j = 0; j < workingBufferQueue[i].size();++j){
+                                std::cout << "Buffer " << workingBufferQueue[i].at(j) << "\n";
+                                for (int z = 0; z < freeBuffer[workingBufferQueue[i].at(j)].getCurSize();++z){
+                                    std::cout << freeBuffer[workingBufferQueue[i].at(j)].buffer[z] << " ";
+                                }
+                                std::cout << "\n";
+                            }
+                          }
+                         // thread 1: do the k-way-merge in memory
+                         std::thread t1(startMerge, &loserTree, &outputBuffer[activeOutputBuffer], freeBuffer, workingBufferQueue, &runNotMergeFinished, isOver, &freeIndex);
+                         // thread 2: write the another output buffer's data to the disk
+                         std::thread t2(writeToDisk, &outputBuffer[(activeOutputBuffer + 1) % 2], &f, isFirst, outputFilePath);
+                         // wait thread 1 to finish
+                         t1.join();
+                         // std::cout << "Successfully merged\n";
+                         //  thread 3: read the run's data that it will first exhaust
+                         std::thread t3(readRunData, freeBuffer, &f, filePath[readIndex], workingBufferQueue, totalRunNum, curRoundTotalNum, runCurPosition, runStartPosition, isFirst, isOver, &curRunNum, curRun, dataSize, &freeIndex, bufferSize);
+                         // wait thread 2 and thread 3 to finish
+                         t2.join();
+                         // std::cout << "Successfully write\n";
+                         t3.join();
+                         // std::cout << "Successfully read\n";
+                         //  update runLen
+                         runLen += outputBuffer[(activeOutputBuffer + 1) % 2].getCurSize();
+                         isFirst = false;
+                         activeOutputBuffer = (activeOutputBuffer + 1) % 2;
                 }
                 // write the last output buffer into the disk
-                writeToDisk(&outputBuffer[(activeOutputBuffer + 1) % 2], &f, false, filePath[writeIndex]);
+                writeToDisk(&outputBuffer[(activeOutputBuffer + 1) % 2], &f, false, outputFilePath);
                 runLen += outputBuffer[(activeOutputBuffer + 1) % 2].getCurSize();
                 //update curRun
                 curRun += curRoundNum;
@@ -950,7 +950,7 @@ void mergeRuns(int k,int bufferSize){
                 curRoundNum =0;
                 //add the runLen to the vector
                 //std::cout << "RunLen is: " <<runLen << "\n";
-                runLength.push_back(runLen);
+                nextRoundRunLength.push_back(runLen);
                 ++nextRoundNum;
                 //reset runLen
                 runLen = 0;
@@ -958,36 +958,25 @@ void mergeRuns(int k,int bufferSize){
                 delete[] treeData;
               }
           }
-          //delete the memory
+          if(nextRoundNum==1){
+              return;
+          }
+          //resetCurrentNum
+          currentRunNum = 0;
+          // update RunLenth
+          runLength.clear();
+          for (int i = 0; i < nextRoundRunLength.size();++i){
+              runLength.push_back(nextRoundRunLength[i]);
+          }
+          createRuns(outputFilePath);
+          // delete the memory
           delete[] runCurPosition;
-          delete[] runStartPosition;
           //Reset the run's info
           runCurPosition = new int[nextRoundNum];
-          runStartPosition = new int[nextRoundNum];
           for (int i = 0; i < nextRoundNum;++i){
-              if(i==0){
-                runStartPosition[i] = 0;
-              }
-              else{
-                runStartPosition[i] = runStartPosition[i - 1] + runLength[i - 1];
-              }
-          }
-          std::cout << "runStartPosition\n";
-          for (int i = 0; i < nextRoundNum;++i){
-              runCurPosition[i] = runStartPosition[i];
-          }
-          for (int i = 0; i < nextRoundNum;++i){
-              std::cout << runStartPosition[i] << " ";
+              runCurPosition[i] =0;
           }
           std::cout << "\n";
-          std::cout << "runCurPosition:\n";
-          for (int i = 0; i < nextRoundNum;++i){
-              std::cout << runCurPosition[i] << " ";
-          }
-          std::cout << "\n";
-          // reset the read and write path
-          writeIndex = (writeIndex + 1) % 2;
-          readIndex = (readIndex + 1) % 2;
           //reset the isFirst flag
           isFirst = true;
           //reset the curRun
@@ -1011,20 +1000,19 @@ int main() {
         std::cout << "Please input the loserTree's size \n";
         int treeSize = 0;
         std::cin >> treeSize;
-        // input the k(Merge Order) and the buffer's size
-        std::cout << "Please input the k(Merge Order) to continue:\n";
+        std::cout << "Please input the merge order k\n";
         int k;
         std::cin >> k;
-        std::cout << "Please input the merge buffer's size:\n";
-        int mergeBufferSize;
-        std::cin >> mergeBufferSize;
+        std::cout << "Please input the mergeOrder's Size\n";
+        int mBufferSize;
+        std::cin >> mBufferSize;
         myTimer.startTimer();
         startSort(bufferSize,treeSize);
-        //getBestMergeSequence();
-        mergeRuns(k,mergeBufferSize);
+        mergeRuns(k, mBufferSize);
         myTimer.endTimer();
         myTimer.calculateTime();
-        std::cout << "Do you want to continue y/n(Yes/No)?\n";
+        std::cout << "Do you want to continue?(y/n)\n";
+        flag = 'n';
         std::cin >> flag;
         system("cls");
     }

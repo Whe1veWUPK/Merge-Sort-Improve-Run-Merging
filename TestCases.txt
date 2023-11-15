@@ -1,8 +1,13 @@
-size 5000 5 64 k= 2 mBuffersize=4 6.57534s
-size 5000 5 64 k= 4 mBuffersize=4 3.18s
-size 5000 5 64 k= 8 mBuffersize=4 2.34s
-size 10000 5 128 k= 2 mBuffersize=2 21.629s
-size 10000 5 128 k= 4 mBuffersize=3 11.001s
-size 10000 5 128 k= 8 mBuffersize=3 8.29129s
-size 10000 5 128 k= 16 mBuffersize=3 8.23821s
-size 10000 5 128 k= 32 mBuffersize=3 7.89584s 
+size 5000 BufferSize: 5 loserTreeSize: 64 k= 2 mBuffersize=4 Time: 5.62776s
+size 5000 BufferSize: 5 loserTreeSize: 64 k= 4 mBuffersize=4 Time: 4.15567s
+size 5000 BufferSize: 5 loserTreeSize: 64 k= 8 mBuffersize=4 Time: 3.58214s
+size 10000 BufferSize: 5 loserTreeSize: 128 k= 2 mBuffersize=2 Time: 21.629s
+size 10000 BufferSize: 5 loserTreeSize: 128 k= 4 mBuffersize=3 Time: 11.001s
+size 10000 BufferSize: 5 loserTreeSize: 128 k= 8 mBuffersize=3 Time: 8.29129s
+size 10000 BufferSize: 5 loserTreeSize: 128 k= 16 mBuffersize=3 Time: 8.23821s
+size 10000 BufferSize: 5 loserTreeSize: 128 k= 32 mBuffersize=3 Time: 7.89584s 
+size 100000 BufferSize: 5 loserTreeSize: 256 k= 4 mBuffersize=3 Time: 216.89s
+size 100000 BufferSize: 64 loserTreeSize: 256 k= 4 mBuffersize=64 Time: 14.4743s
+size 100000 BufferSize: 5 loserTreeSize: 256 k= 64 mBuffersize=3 Time: 199.545s
+size 100000 BufferSize: 64 loserTreeSize: 256 k= 64 mBuffersize=64 Time: 25.2261s
+size 64 BufferSize: 5 loserTreeSize: 10 k= 2 mBuffersize=2 Time: 0.0579667s

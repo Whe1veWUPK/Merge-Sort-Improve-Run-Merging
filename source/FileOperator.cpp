@@ -57,7 +57,7 @@ void FileOperator::writeToFile(std::string filepath, int predictSize, bool isFir
     std::fstream fout;
     if (isFirst) {
         //如果是某一轮次的第一个 outputBuffer输出 则重写文档
-        fout.open(filepath, std::ios::out | std::ios::trunc);
+        fout.open(filepath, std::ios::out);
     }
     else {
         //如果不是 则续写文档

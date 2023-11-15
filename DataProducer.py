@@ -1,8 +1,8 @@
 import numpy as np
 import os
 """随机生成的数据的数值范围"""
-MAXNUM = 1000000
-MINNUM = -1000000
+MAXNUM = 10000000
+MINNUM = -10000000
 """设置数据文件生成路径"""
 path = os.getcwd()
 
